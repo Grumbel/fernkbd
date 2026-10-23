@@ -3,7 +3,7 @@
 ## Tip
 
 - Base commit of this work line: `d8b6ef0` (Initial checkin — Python fernkbd.py)
-- Current tip: (update after commit)
+- Current tip: `874dee0` (Add flake.nix for Nix packaging)
 - Branch: master
 
 ## Done
