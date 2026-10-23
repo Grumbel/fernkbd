@@ -1,0 +1,11 @@
+[package]
+name = "fernkbd"
+version = "0.1.0"
+edition = "2021"
+description = "Virtual keyboard that injects terminal input via uinput/evdev"
+license = "GPL-3.0-or-later"
+authors = ["Ingo Ruhnke <grumbel@gmail.com>"]
+
+[dependencies]
+evdev = "0.13"
+libc = "0.2"
