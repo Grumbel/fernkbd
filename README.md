@@ -42,3 +42,16 @@ Unmapped characters are ignored.
 ## License
 
 GPL-3.0-or-later
+
+## Nix
+
+```bash
+nix build
+./result/bin/fernkbd
+
+# or
+nix run
+
+# development shell
+nix develop
+```

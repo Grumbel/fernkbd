@@ -16,6 +16,8 @@ events via uinput/evdev.
 
 ```bash
 cargo build --release
+# or
+nix build
 # Runtime test needs /dev/uinput access; prefer handing over the bundle
 # rather than long test runs in the sandbox.
 ```
