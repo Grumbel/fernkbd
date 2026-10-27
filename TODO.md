@@ -3,7 +3,7 @@
 ## Tip
 
 - Base commit of this work line: `d8b6ef0` (Initial checkin — Python fernkbd.py)
-- Current tip: `3dd2e35` (Add Ctrl key support and triple-Ctrl-C exit)
+- Current tip: `1f9caf6` (Update TODO.md with current tip)
 - Branch: master
 
 ## Done
