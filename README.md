@@ -30,22 +30,30 @@ Press **Ctrl+C three times in a row** to exit. The terminal is restored on exit.
 A single (or double) Ctrl+C is injected as a real Ctrl+C so the target
 application can receive it.
 
-## Character set
+## Supported input
 
-Supports the same US-layout mapping as the original Python script:
+### Characters (US layout)
 
 - `a`–`z` / `A`–`Z`
 - `0`–`9` and shifted symbols `!@#$%^&*()`
 - Space, Enter, Tab, Backspace
 - Common punctuation: `-_=+[]{};:'",.<>/?`\`~|`
 
-Plus Ctrl combinations:
+### Modifiers / control
 
 - Ctrl+A … Ctrl+Z (including Ctrl+C)
-- ESC (and Ctrl+[)
-- Ctrl+\ , Ctrl+] , Ctrl+^ , Ctrl+_
+- ESC, Ctrl+\, Ctrl+], Ctrl+^, Ctrl+_
 
-Unmapped characters are ignored.
+### Navigation & function keys (via terminal escape sequences)
+
+- Arrow keys, Home, End, Insert, Delete, PageUp, PageDown
+- F1–F12
+
+### Alt (Meta)
+
+- ESC followed by a character is treated as Alt+character (common terminal convention).
+
+Unmapped sequences/bytes are ignored.
 
 ## License
 

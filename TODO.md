@@ -3,7 +3,7 @@
 ## Tip
 
 - Base commit of this work line: `d8b6ef0` (Initial checkin — Python fernkbd.py)
-- Current tip: `d70758b` (Record tip after Ctrl support work)
+- Current tip: `af267fc` (Add escape-sequence support for arrows, nav and function keys)
 - Branch: master
 
 ## Done
@@ -17,9 +17,13 @@
 - Added Ctrl support for Ctrl+A…Z and a few other control characters.
 - Changed exit sequence to three consecutive Ctrl+C presses so that a
   single Ctrl+C can be injected into the target.
+- Added multi-byte escape sequence parsing (arrows, Home/End, PageUp/Down,
+  Insert/Delete, F1–F12) with a short poll timeout after ESC.
+- ESC + printable character is treated as Alt+key.
 
 ## Open
 
 - Runtime testing on a machine with `/dev/uinput` (left to the user).
-- Optional future: more keycodes / non-US layouts if needed.
-- Optional future: multi-byte sequences (arrows, function keys, Alt+…).
+- Optional: richer CSI modifier parsing (Ctrl/Shift/Alt combinations on
+  arrows and function keys, e.g. ESC [ 1 ; 5 A for Ctrl+Up).
+- Optional: non-US layouts if needed.
