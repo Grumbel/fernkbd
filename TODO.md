@@ -3,7 +3,7 @@
 ## Tip
 
 - Base commit of this work line: `d8b6ef0` (Initial checkin — Python fernkbd.py)
-- Current tip: `18112f2` (Fix raw-mode output and show last injected key)
+- Current tip: `5fd088d` (Record accurate tip after status-line work)
 - Branch: master
 
 ## Done
