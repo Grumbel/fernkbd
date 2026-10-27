@@ -7,7 +7,7 @@
 //! Requires write access to `/dev/uinput` (typically root or the `input` group).
 
 use std::collections::HashMap;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::os::unix::io::AsRawFd;
 
 use evdev::{
@@ -19,7 +19,6 @@ use libc::{self, c_int, termios, TCSADRAIN};
 fn build_char_map() -> HashMap<char, (KeyCode, bool)> {
     let mut m = HashMap::new();
 
-    // Letters
     let letters = [
         ('a', KeyCode::KEY_A),
         ('b', KeyCode::KEY_B),
@@ -53,7 +52,6 @@ fn build_char_map() -> HashMap<char, (KeyCode, bool)> {
         m.insert(ch.to_ascii_uppercase(), (code, true));
     }
 
-    // Digits and their shift symbols
     let digits = [
         ('1', KeyCode::KEY_1, '!'),
         ('2', KeyCode::KEY_2, '@'),
@@ -71,14 +69,12 @@ fn build_char_map() -> HashMap<char, (KeyCode, bool)> {
         m.insert(shifted, (code, true));
     }
 
-    // Whitespace / control-like
     m.insert(' ', (KeyCode::KEY_SPACE, false));
     m.insert('\n', (KeyCode::KEY_ENTER, false));
     m.insert('\r', (KeyCode::KEY_ENTER, false));
     m.insert('\t', (KeyCode::KEY_TAB, false));
-    m.insert('\x7f', (KeyCode::KEY_BACKSPACE, false)); // DEL
+    m.insert('\x7f', (KeyCode::KEY_BACKSPACE, false));
 
-    // Punctuation
     let punct = [
         ('-', KeyCode::KEY_MINUS, '_'),
         ('=', KeyCode::KEY_EQUAL, '+'),
@@ -100,8 +96,6 @@ fn build_char_map() -> HashMap<char, (KeyCode, bool)> {
     m
 }
 
-/// Map a single-byte control character (0x01–0x1f) to a keycode.
-/// Letters become Ctrl+letter; a few others map to common keys.
 fn control_to_keycode(b: u8) -> Option<KeyCode> {
     match b {
         0x01 => Some(KeyCode::KEY_A),
@@ -139,11 +133,8 @@ fn control_to_keycode(b: u8) -> Option<KeyCode> {
     }
 }
 
-/// Known CSI / SS3 sequences → keycode (no modifiers).
-/// Matched against the bytes that follow ESC.
 fn match_escape_sequence(seq: &[u8]) -> Option<KeyCode> {
     match seq {
-        // CSI (ESC [ …)
         b"[A" => Some(KeyCode::KEY_UP),
         b"[B" => Some(KeyCode::KEY_DOWN),
         b"[C" => Some(KeyCode::KEY_RIGHT),
@@ -154,14 +145,12 @@ fn match_escape_sequence(seq: &[u8]) -> Option<KeyCode> {
         b"[3~" => Some(KeyCode::KEY_DELETE),
         b"[5~" => Some(KeyCode::KEY_PAGEUP),
         b"[6~" => Some(KeyCode::KEY_PAGEDOWN),
-        // Application cursor mode (SS3 / ESC O …)
         b"OA" => Some(KeyCode::KEY_UP),
         b"OB" => Some(KeyCode::KEY_DOWN),
         b"OC" => Some(KeyCode::KEY_RIGHT),
         b"OD" => Some(KeyCode::KEY_LEFT),
         b"OH" => Some(KeyCode::KEY_HOME),
         b"OF" => Some(KeyCode::KEY_END),
-        // Function keys (common xterm / vt100 forms)
         b"OP" | b"[11~" => Some(KeyCode::KEY_F1),
         b"OQ" | b"[12~" => Some(KeyCode::KEY_F2),
         b"OR" | b"[13~" => Some(KeyCode::KEY_F3),
@@ -178,6 +167,102 @@ fn match_escape_sequence(seq: &[u8]) -> Option<KeyCode> {
     }
 }
 
+/// Human-readable name for a keycode (for the status line).
+fn keycode_name(code: KeyCode) -> &'static str {
+    match code {
+        KeyCode::KEY_A => "A",
+        KeyCode::KEY_B => "B",
+        KeyCode::KEY_C => "C",
+        KeyCode::KEY_D => "D",
+        KeyCode::KEY_E => "E",
+        KeyCode::KEY_F => "F",
+        KeyCode::KEY_G => "G",
+        KeyCode::KEY_H => "H",
+        KeyCode::KEY_I => "I",
+        KeyCode::KEY_J => "J",
+        KeyCode::KEY_K => "K",
+        KeyCode::KEY_L => "L",
+        KeyCode::KEY_M => "M",
+        KeyCode::KEY_N => "N",
+        KeyCode::KEY_O => "O",
+        KeyCode::KEY_P => "P",
+        KeyCode::KEY_Q => "Q",
+        KeyCode::KEY_R => "R",
+        KeyCode::KEY_S => "S",
+        KeyCode::KEY_T => "T",
+        KeyCode::KEY_U => "U",
+        KeyCode::KEY_V => "V",
+        KeyCode::KEY_W => "W",
+        KeyCode::KEY_X => "X",
+        KeyCode::KEY_Y => "Y",
+        KeyCode::KEY_Z => "Z",
+        KeyCode::KEY_0 => "0",
+        KeyCode::KEY_1 => "1",
+        KeyCode::KEY_2 => "2",
+        KeyCode::KEY_3 => "3",
+        KeyCode::KEY_4 => "4",
+        KeyCode::KEY_5 => "5",
+        KeyCode::KEY_6 => "6",
+        KeyCode::KEY_7 => "7",
+        KeyCode::KEY_8 => "8",
+        KeyCode::KEY_9 => "9",
+        KeyCode::KEY_SPACE => "Space",
+        KeyCode::KEY_ENTER => "Enter",
+        KeyCode::KEY_TAB => "Tab",
+        KeyCode::KEY_BACKSPACE => "Backspace",
+        KeyCode::KEY_ESC => "Esc",
+        KeyCode::KEY_MINUS => "-",
+        KeyCode::KEY_EQUAL => "=",
+        KeyCode::KEY_LEFTBRACE => "[",
+        KeyCode::KEY_RIGHTBRACE => "]",
+        KeyCode::KEY_SEMICOLON => ";",
+        KeyCode::KEY_APOSTROPHE => "'",
+        KeyCode::KEY_GRAVE => "`",
+        KeyCode::KEY_BACKSLASH => "\\",
+        KeyCode::KEY_COMMA => ",",
+        KeyCode::KEY_DOT => ".",
+        KeyCode::KEY_SLASH => "/",
+        KeyCode::KEY_UP => "Up",
+        KeyCode::KEY_DOWN => "Down",
+        KeyCode::KEY_LEFT => "Left",
+        KeyCode::KEY_RIGHT => "Right",
+        KeyCode::KEY_HOME => "Home",
+        KeyCode::KEY_END => "End",
+        KeyCode::KEY_INSERT => "Insert",
+        KeyCode::KEY_DELETE => "Delete",
+        KeyCode::KEY_PAGEUP => "PageUp",
+        KeyCode::KEY_PAGEDOWN => "PageDown",
+        KeyCode::KEY_F1 => "F1",
+        KeyCode::KEY_F2 => "F2",
+        KeyCode::KEY_F3 => "F3",
+        KeyCode::KEY_F4 => "F4",
+        KeyCode::KEY_F5 => "F5",
+        KeyCode::KEY_F6 => "F6",
+        KeyCode::KEY_F7 => "F7",
+        KeyCode::KEY_F8 => "F8",
+        KeyCode::KEY_F9 => "F9",
+        KeyCode::KEY_F10 => "F10",
+        KeyCode::KEY_F11 => "F11",
+        KeyCode::KEY_F12 => "F12",
+        _ => "?",
+    }
+}
+
+fn describe_key(code: KeyCode, shift: bool, ctrl: bool, alt: bool) -> String {
+    let mut parts = Vec::new();
+    if alt {
+        parts.push("Alt");
+    }
+    if ctrl {
+        parts.push("Ctrl");
+    }
+    if shift {
+        parts.push("Shift");
+    }
+    parts.push(keycode_name(code));
+    parts.join("+")
+}
+
 fn key_event(code: KeyCode, value: i32) -> InputEvent {
     InputEvent::new(EventType::KEY.0, code.0, value)
 }
@@ -186,7 +271,6 @@ fn syn_event() -> InputEvent {
     InputEvent::new(EventType::SYNCHRONIZATION.0, 0, 0)
 }
 
-/// Emit a key press/release, optionally with Shift, Ctrl and/or Alt held.
 fn emit_key(
     device: &mut VirtualDevice,
     code: KeyCode,
@@ -221,7 +305,13 @@ fn emit_key(
     Ok(())
 }
 
-/// Put the terminal into raw mode (equivalent to termios::cfmakeraw + tcsetattr).
+/// Write a status line that works in raw mode (no OPOST). Uses CR + clear-to-EOL.
+fn write_status(out: &mut impl Write, text: &str) -> io::Result<()> {
+    // \r = carriage return, \x1b[K = erase from cursor to end of line
+    write!(out, "\r\x1b[K{}", text)?;
+    out.flush()
+}
+
 unsafe fn set_raw(fd: c_int, old: &mut termios) -> io::Result<()> {
     if libc::tcgetattr(fd, old) != 0 {
         return Err(io::Error::last_os_error());
@@ -251,7 +341,6 @@ unsafe fn restore(fd: c_int, old: &termios) {
     let _ = libc::tcsetattr(fd, TCSADRAIN, old);
 }
 
-/// Read up to `buf.len()` bytes with a timeout (milliseconds). Returns 0 on timeout.
 fn read_timeout(fd: c_int, buf: &mut [u8], timeout_ms: i32) -> io::Result<usize> {
     let mut pfd = libc::pollfd {
         fd,
@@ -263,10 +352,8 @@ fn read_timeout(fd: c_int, buf: &mut [u8], timeout_ms: i32) -> io::Result<usize>
         return Err(io::Error::last_os_error());
     }
     if ret == 0 {
-        return Ok(0); // timeout
+        return Ok(0);
     }
-    // Data available — perform a non-blocking style read of what is ready.
-    // Temporarily set O_NONBLOCK so we don't block if the sequence is partial.
     let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
     if flags < 0 {
         return Err(io::Error::last_os_error());
@@ -295,7 +382,6 @@ fn read_timeout(fd: c_int, buf: &mut [u8], timeout_ms: i32) -> io::Result<usize>
 fn main() -> io::Result<()> {
     let char_map = build_char_map();
 
-    // Collect every keycode we may emit (plus modifiers)
     let mut keys = AttributeSet::<KeyCode>::new();
     keys.insert(KeyCode::KEY_LEFTSHIFT);
     keys.insert(KeyCode::KEY_LEFTCTRL);
@@ -310,7 +396,6 @@ fn main() -> io::Result<()> {
             keys.insert(code);
         }
     }
-    // Navigation / function keys used by escape sequences
     for code in [
         KeyCode::KEY_UP,
         KeyCode::KEY_DOWN,
@@ -338,6 +423,7 @@ fn main() -> io::Result<()> {
         keys.insert(code);
     }
 
+    // All startup messages while the terminal is still in cooked mode.
     println!("[*] Initializing virtual keyboard via /dev/uinput...");
 
     let mut device = VirtualDevice::builder()?
@@ -351,21 +437,28 @@ fn main() -> io::Result<()> {
         }
     }
 
+    println!("[*] Virtual keyboard active!");
+    println!("[*] Anything you type into this terminal will be injected globally.");
+    println!("[*] Ctrl, Alt, arrows, Home/End, PageUp/Down, F1–F12 supported.");
+    println!("[*] Press Ctrl+C three times in a row to exit.");
+    println!();
+
     let stdin = io::stdin();
     let fd = stdin.as_raw_fd();
     let mut old: termios = unsafe { std::mem::zeroed() };
     unsafe { set_raw(fd, &mut old)? };
 
-    println!("[*] Virtual keyboard active!");
-    println!("[*] Anything you type into this terminal will be injected globally.");
-    println!("[*] Ctrl combinations, arrows, Home/End, PageUp/Down, F1–F12 supported.");
-    println!("[*] Press Ctrl+C three times in a row to exit.\n");
+    // From here on stdout is in raw mode — only use write_status / \r\n.
+    let mut stdout = io::stdout();
+    write_status(
+        &mut stdout,
+        "[*] last: (none)                    |  exit: Ctrl+C ×3",
+    )?;
 
     let result = (|| -> io::Result<()> {
         let mut stdin = stdin.lock();
         let mut buf = [0u8; 1];
         let mut consecutive_ctrl_c: u8 = 0;
-        // Scratch buffer for bytes following ESC
         let mut esc_buf = [0u8; 8];
 
         loop {
@@ -375,90 +468,99 @@ fn main() -> io::Result<()> {
             }
             let b = buf[0];
 
-            // Ctrl+C (0x03): emit it, three consecutive ones exit.
+            let mut emitted: Option<(KeyCode, bool, bool, bool)> = None;
+
             if b == 0x03 {
                 consecutive_ctrl_c = consecutive_ctrl_c.saturating_add(1);
                 emit_key(&mut device, KeyCode::KEY_C, false, true, false)?;
+                emitted = Some((KeyCode::KEY_C, false, true, false));
                 if consecutive_ctrl_c >= 3 {
+                    if let Some((code, shift, ctrl, alt)) = emitted {
+                        let desc = describe_key(code, shift, ctrl, alt);
+                        write_status(
+                            &mut stdout,
+                            &format!(
+                                "[*] last: {:<20} |  exit: Ctrl+C ×3  (quitting…)",
+                                desc
+                            ),
+                        )?;
+                    }
                     break;
                 }
-                continue;
-            }
-            consecutive_ctrl_c = 0;
+            } else {
+                consecutive_ctrl_c = 0;
 
-            // ESC — try to gather a multi-byte sequence with a short timeout.
-            if b == 0x1b {
-                // Wait up to 50 ms for the rest of a CSI/SS3 sequence.
-                let got = read_timeout(fd, &mut esc_buf, 50)?;
-                if got == 0 {
-                    // Lone ESC
-                    emit_key(&mut device, KeyCode::KEY_ESC, false, false, false)?;
-                    continue;
-                }
+                if b == 0x1b {
+                    let got = read_timeout(fd, &mut esc_buf, 50)?;
+                    if got == 0 {
+                        emit_key(&mut device, KeyCode::KEY_ESC, false, false, false)?;
+                        emitted = Some((KeyCode::KEY_ESC, false, false, false));
+                    } else {
+                        let seq = &esc_buf[..got];
+                        let mut matched = false;
 
-                let seq = &esc_buf[..got];
+                        if let Some(code) = match_escape_sequence(seq) {
+                            emit_key(&mut device, code, false, false, false)?;
+                            emitted = Some((code, false, false, false));
+                            matched = true;
+                        } else {
+                            for len in (1..=got).rev() {
+                                if let Some(code) = match_escape_sequence(&seq[..len]) {
+                                    emit_key(&mut device, code, false, false, false)?;
+                                    emitted = Some((code, false, false, false));
+                                    matched = true;
+                                    break;
+                                }
+                            }
+                        }
 
-                // Full known sequence?
-                if let Some(code) = match_escape_sequence(seq) {
-                    emit_key(&mut device, code, false, false, false)?;
-                    continue;
-                }
-
-                // Partial / longer sequences: try the longest known prefixes.
-                // (e.g. some terminals send extra modifier params we ignore for now)
-                let mut matched = false;
-                for len in (1..=got).rev() {
-                    if let Some(code) = match_escape_sequence(&seq[..len]) {
-                        emit_key(&mut device, code, false, false, false)?;
-                        // leftover bytes after the match are ignored for simplicity
-                        matched = true;
-                        break;
+                        if !matched {
+                            if got == 1 {
+                                let ch = seq[0] as char;
+                                if let Some(&(code, shift)) = char_map.get(&ch) {
+                                    emit_key(&mut device, code, shift, false, true)?;
+                                    emitted = Some((code, shift, false, true));
+                                    matched = true;
+                                } else if let Some(code) = control_to_keycode(seq[0]) {
+                                    let with_ctrl = seq[0] != 0x1b;
+                                    emit_key(&mut device, code, false, with_ctrl, true)?;
+                                    emitted = Some((code, false, with_ctrl, true));
+                                    matched = true;
+                                }
+                            }
+                            if !matched {
+                                emit_key(&mut device, KeyCode::KEY_ESC, false, false, false)?;
+                                emitted = Some((KeyCode::KEY_ESC, false, false, false));
+                            }
+                        }
                     }
-                }
-                if matched {
-                    continue;
-                }
-
-                // ESC + single printable → treat as Alt+key (common Meta convention)
-                if got == 1 {
-                    let ch = seq[0] as char;
+                } else {
+                    let ch = b as char;
                     if let Some(&(code, shift)) = char_map.get(&ch) {
-                        emit_key(&mut device, code, shift, false, true)?;
-                        continue;
-                    }
-                    if let Some(code) = control_to_keycode(seq[0]) {
-                        // ESC + control char → Alt+Ctrl+…
-                        let with_ctrl = seq[0] != 0x1b;
-                        emit_key(&mut device, code, false, with_ctrl, true)?;
-                        continue;
+                        emit_key(&mut device, code, shift, false, false)?;
+                        emitted = Some((code, shift, false, false));
+                    } else if let Some(code) = control_to_keycode(b) {
+                        emit_key(&mut device, code, false, true, false)?;
+                        emitted = Some((code, false, true, false));
                     }
                 }
-
-                // Unknown sequence: emit ESC then re-process the following bytes
-                // by falling through one at a time would require a push-back buffer.
-                // For now emit plain ESC and drop the rest (uncommon).
-                emit_key(&mut device, KeyCode::KEY_ESC, false, false, false)?;
-                continue;
             }
 
-            // Prefer the printable / special char map (Tab, Enter, Backspace, …)
-            let ch = b as char;
-            if let Some(&(code, shift)) = char_map.get(&ch) {
-                emit_key(&mut device, code, shift, false, false)?;
-                continue;
+            if let Some((code, shift, ctrl, alt)) = emitted {
+                let desc = describe_key(code, shift, ctrl, alt);
+                write_status(
+                    &mut stdout,
+                    &format!("[*] last: {:<20} |  exit: Ctrl+C ×3", desc),
+                )?;
             }
-
-            // Remaining single-byte control characters → Ctrl + key
-            if let Some(code) = control_to_keycode(b) {
-                let with_ctrl = true; // ESC already handled above
-                emit_key(&mut device, code, false, with_ctrl, false)?;
-            }
-            // Unmapped bytes are silently ignored
         }
         Ok(())
     })();
 
+    // Leave raw mode before the final message so newlines work again.
     unsafe { restore(fd, &old) };
+    // Clear the status line and print a clean goodbye.
+    print!("\r\x1b[K");
     println!("\n[*] Virtual keyboard stopped. Terminal restored.");
 
     result

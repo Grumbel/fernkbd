@@ -3,7 +3,7 @@
 ## Tip
 
 - Base commit of this work line: `d8b6ef0` (Initial checkin — Python fernkbd.py)
-- Current tip: `6d8bad5` (Update TODO tip to current HEAD)
+- Current tip: `18112f2` (Fix raw-mode output and show last injected key)
 - Branch: master
 
 ## Done
@@ -20,6 +20,9 @@
 - Added multi-byte escape sequence parsing (arrows, Home/End, PageUp/Down,
   Insert/Delete, F1–F12) with a short poll timeout after ESC.
 - ESC + printable character is treated as Alt+key.
+- Fixed stdout mangling under raw mode: all startup messages are printed
+  before entering raw mode; a single status line is updated with CR + erase
+  afterwards and shows the last injected key.
 
 ## Open
 
@@ -27,3 +30,5 @@
 - Optional: richer CSI modifier parsing (Ctrl/Shift/Alt combinations on
   arrows and function keys, e.g. ESC [ 1 ; 5 A for Ctrl+Up).
 - Optional: non-US layouts if needed.
+- Mouse reporting deferred until an X11 (or other) client path exists;
+  terminal mouse protocols only give character-cell coordinates.

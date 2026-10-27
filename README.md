@@ -30,6 +30,9 @@ Press **Ctrl+C three times in a row** to exit. The terminal is restored on exit.
 A single (or double) Ctrl+C is injected as a real Ctrl+C so the target
 application can receive it.
 
+While running, a status line at the bottom shows the last key that was
+injected (e.g. `Ctrl+C`, `Shift+A`, `Up`, `Alt+x`).
+
 ## Supported input
 
 ### Characters (US layout)
