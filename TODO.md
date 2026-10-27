@@ -3,7 +3,7 @@
 ## Tip
 
 - Base commit of this work line: `d8b6ef0` (Initial checkin — Python fernkbd.py)
-- Current tip: `af267fc` (Add escape-sequence support for arrows, nav and function keys)
+- Current tip: `6d8bad5` (Update TODO tip to current HEAD)
 - Branch: master
 
 ## Done
