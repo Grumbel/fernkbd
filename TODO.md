@@ -3,7 +3,7 @@
 ## Tip
 
 - Base commit of this work line: `d8b6ef0` (Initial checkin — Python fernkbd.py)
-- Current tip: `e98e490` (Point TODO tip at current HEAD)
+- Current tip: `d70758b` (Record tip after Ctrl support work)
 - Branch: master
 
 ## Done
