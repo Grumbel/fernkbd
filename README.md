@@ -26,7 +26,9 @@ sudo ./target/release/fernkbd
 ./target/release/fernkbd
 ```
 
-Press `Ctrl+C` to exit. The terminal is restored on exit.
+Press **Ctrl+C three times in a row** to exit. The terminal is restored on exit.
+A single (or double) Ctrl+C is injected as a real Ctrl+C so the target
+application can receive it.
 
 ## Character set
 
@@ -36,6 +38,12 @@ Supports the same US-layout mapping as the original Python script:
 - `0`–`9` and shifted symbols `!@#$%^&*()`
 - Space, Enter, Tab, Backspace
 - Common punctuation: `-_=+[]{};:'",.<>/?`\`~|`
+
+Plus Ctrl combinations:
+
+- Ctrl+A … Ctrl+Z (including Ctrl+C)
+- ESC (and Ctrl+[)
+- Ctrl+\ , Ctrl+] , Ctrl+^ , Ctrl+_
 
 Unmapped characters are ignored.
 

@@ -15,7 +15,7 @@ use evdev::{
 };
 use libc::{self, c_int, termios, TCSADRAIN};
 
-/// Map a character to (keycode, needs_shift).
+/// Map a printable character to (keycode, needs_shift).
 fn build_char_map() -> HashMap<char, (KeyCode, bool)> {
     let mut m = HashMap::new();
 
@@ -100,6 +100,47 @@ fn build_char_map() -> HashMap<char, (KeyCode, bool)> {
     m
 }
 
+/// Map a single-byte control character (0x01–0x1f, excluding DEL) to a keycode.
+/// Letters become Ctrl+letter; a few others map to common keys.
+fn control_to_keycode(b: u8) -> Option<KeyCode> {
+    match b {
+        // Ctrl+A … Ctrl+Z
+        0x01 => Some(KeyCode::KEY_A),
+        0x02 => Some(KeyCode::KEY_B),
+        0x03 => Some(KeyCode::KEY_C),
+        0x04 => Some(KeyCode::KEY_D),
+        0x05 => Some(KeyCode::KEY_E),
+        0x06 => Some(KeyCode::KEY_F),
+        0x07 => Some(KeyCode::KEY_G),
+        0x08 => Some(KeyCode::KEY_H),
+        0x09 => Some(KeyCode::KEY_I), // also Tab, but Tab is already in char map
+        0x0a => Some(KeyCode::KEY_J), // also Line Feed
+        0x0b => Some(KeyCode::KEY_K),
+        0x0c => Some(KeyCode::KEY_L),
+        0x0d => Some(KeyCode::KEY_M), // also CR
+        0x0e => Some(KeyCode::KEY_N),
+        0x0f => Some(KeyCode::KEY_O),
+        0x10 => Some(KeyCode::KEY_P),
+        0x11 => Some(KeyCode::KEY_Q),
+        0x12 => Some(KeyCode::KEY_R),
+        0x13 => Some(KeyCode::KEY_S),
+        0x14 => Some(KeyCode::KEY_T),
+        0x15 => Some(KeyCode::KEY_U),
+        0x16 => Some(KeyCode::KEY_V),
+        0x17 => Some(KeyCode::KEY_W),
+        0x18 => Some(KeyCode::KEY_X),
+        0x19 => Some(KeyCode::KEY_Y),
+        0x1a => Some(KeyCode::KEY_Z),
+        // Common non-letter controls
+        0x1b => Some(KeyCode::KEY_ESC),          // Ctrl+[ / ESC
+        0x1c => Some(KeyCode::KEY_BACKSLASH),    // Ctrl+\
+        0x1d => Some(KeyCode::KEY_RIGHTBRACE),   // Ctrl+]
+        0x1e => Some(KeyCode::KEY_6),            // Ctrl+^
+        0x1f => Some(KeyCode::KEY_MINUS),        // Ctrl+_
+        _ => None,
+    }
+}
+
 fn key_event(code: KeyCode, value: i32) -> InputEvent {
     InputEvent::new(EventType::KEY.0, code.0, value)
 }
@@ -108,7 +149,16 @@ fn syn_event() -> InputEvent {
     InputEvent::new(EventType::SYNCHRONIZATION.0, 0, 0)
 }
 
-fn emit_key(device: &mut VirtualDevice, code: KeyCode, shift: bool) -> io::Result<()> {
+/// Emit a key press/release, optionally with Shift and/or Ctrl held.
+fn emit_key(
+    device: &mut VirtualDevice,
+    code: KeyCode,
+    shift: bool,
+    ctrl: bool,
+) -> io::Result<()> {
+    if ctrl {
+        device.emit(&[key_event(KeyCode::KEY_LEFTCTRL, 1), syn_event()])?;
+    }
     if shift {
         device.emit(&[key_event(KeyCode::KEY_LEFTSHIFT, 1), syn_event()])?;
     }
@@ -120,6 +170,9 @@ fn emit_key(device: &mut VirtualDevice, code: KeyCode, shift: bool) -> io::Resul
     ])?;
     if shift {
         device.emit(&[key_event(KeyCode::KEY_LEFTSHIFT, 0), syn_event()])?;
+    }
+    if ctrl {
+        device.emit(&[key_event(KeyCode::KEY_LEFTCTRL, 0), syn_event()])?;
     }
     Ok(())
 }
@@ -158,11 +211,19 @@ unsafe fn restore(fd: c_int, old: &termios) {
 fn main() -> io::Result<()> {
     let char_map = build_char_map();
 
-    // Collect every keycode we may emit (plus LeftShift)
+    // Collect every keycode we may emit (plus modifiers)
     let mut keys = AttributeSet::<KeyCode>::new();
     keys.insert(KeyCode::KEY_LEFTSHIFT);
+    keys.insert(KeyCode::KEY_LEFTCTRL);
+    keys.insert(KeyCode::KEY_ESC);
     for (code, _) in char_map.values() {
         keys.insert(*code);
+    }
+    // Ensure control-mapped keys are present even if not already in char_map
+    for b in 0x01u8..=0x1f {
+        if let Some(code) = control_to_keycode(b) {
+            keys.insert(code);
+        }
     }
 
     println!("[*] Initializing virtual keyboard via /dev/uinput...");
@@ -186,11 +247,14 @@ fn main() -> io::Result<()> {
 
     println!("[*] Virtual keyboard active!");
     println!("[*] Anything you type into this terminal will be injected globally.");
-    println!("[*] Press Ctrl+C to exit.\n");
+    println!("[*] Ctrl combinations (Ctrl+A … Ctrl+Z, ESC, …) are supported.");
+    println!("[*] Press Ctrl+C three times in a row to exit.\n");
 
     let result = (|| -> io::Result<()> {
         let mut stdin = stdin.lock();
         let mut buf = [0u8; 1];
+        let mut consecutive_ctrl_c: u8 = 0;
+
         loop {
             let n = stdin.read(&mut buf)?;
             if n == 0 {
@@ -198,16 +262,31 @@ fn main() -> io::Result<()> {
             }
             let b = buf[0];
 
-            // Ctrl+C
+            // Ctrl+C (0x03): emit it, but three consecutive ones exit.
             if b == 0x03 {
-                break;
+                consecutive_ctrl_c = consecutive_ctrl_c.saturating_add(1);
+                emit_key(&mut device, KeyCode::KEY_C, false, true)?;
+                if consecutive_ctrl_c >= 3 {
+                    break;
+                }
+                continue;
             }
+            consecutive_ctrl_c = 0;
 
+            // Prefer the printable / special char map (covers Tab, Enter, Backspace, …)
             let ch = b as char;
             if let Some(&(code, shift)) = char_map.get(&ch) {
-                emit_key(&mut device, code, shift)?;
+                emit_key(&mut device, code, shift, false)?;
+                continue;
             }
-            // Unmapped bytes are silently ignored (same as the Python original)
+
+            // Remaining control characters → Ctrl + corresponding key
+            if let Some(code) = control_to_keycode(b) {
+                // For ESC we emit plain ESC (no Ctrl); for the rest we hold Ctrl.
+                let with_ctrl = b != 0x1b;
+                emit_key(&mut device, code, false, with_ctrl)?;
+            }
+            // Unmapped bytes are silently ignored (same as the original)
         }
         Ok(())
     })();
