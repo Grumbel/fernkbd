@@ -3,7 +3,7 @@
 ## Tip
 
 - Base commit of this work line: `d8b6ef0` (Initial checkin — Python fernkbd.py)
-- Current tip: `41b4772` (Add CLI flags, VERSION scheme, man page; fix arrow-key input)
+- Current tip: `46ded35` (Record tip after CLI/man/VERSION work)
 - Branch: master
 
 ## Done
