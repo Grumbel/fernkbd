@@ -5,6 +5,7 @@ edition = "2021"
 description = "Virtual keyboard that injects terminal input via uinput/evdev"
 license = "GPL-3.0-or-later"
 authors = ["Ingo Ruhnke <grumbel@gmail.com>"]
+build = "build.rs"
 
 [dependencies]
 evdev = "0.13"

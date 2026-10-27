@@ -12,20 +12,36 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
+
+        versionBase = nixpkgs.lib.strings.removeSuffix "\n" (builtins.readFile ./VERSION);
+        gitRev = "${self.shortRev or self.dirtyShortRev or "dirty"}";
+        isDev = nixpkgs.lib.strings.hasInfix "-dev" versionBase;
+        version =
+          if isDev then
+            "${versionBase}.${toString (self.revCount or 0)}+g${gitRev}"
+          else
+            versionBase;
       in
       {
         packages.default = pkgs.rustPlatform.buildRustPackage {
           pname = "fernkbd";
-          version = "0.1.0";
+          inherit version;
           src = self;
 
           cargoLock = {
             lockFile = ./Cargo.lock;
           };
 
+          # Same full version string the binary reports via --version.
+          FERNKBD_VERSION = version;
+
+          postInstall = ''
+            install -Dm644 man/fernkbd.1 $out/share/man/man1/fernkbd.1
+          '';
+
           meta = with pkgs.lib; {
             description = "Virtual keyboard that injects terminal input via uinput/evdev";
-            homepage = "https://github.com/grumbel/fernkbd"; # placeholder
+            homepage = "https://github.com/Grumbel/fernkbd";
             license = licenses.gpl3Plus;
             maintainers = [ ];
             platforms = platforms.linux;

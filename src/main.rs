@@ -7,15 +7,17 @@
 //! Requires write access to `/dev/uinput` (typically root or the `input` group).
 
 use std::collections::HashMap;
-use std::io::{self, Read, Write};
+use std::io::{self, Write};
 use std::os::unix::io::AsRawFd;
+use std::process;
 
 use evdev::{
     uinput::VirtualDevice, AttributeSet, EventType, InputEvent, KeyCode,
 };
 use libc::{self, c_int, termios, TCSADRAIN};
 
-/// Map a printable character to (keycode, needs_shift).
+const VERSION: &str = env!("FERNKBD_VERSION");
+
 fn build_char_map() -> HashMap<char, (KeyCode, bool)> {
     let mut m = HashMap::new();
 
@@ -167,7 +169,6 @@ fn match_escape_sequence(seq: &[u8]) -> Option<KeyCode> {
     }
 }
 
-/// Human-readable name for a keycode (for the status line).
 fn keycode_name(code: KeyCode) -> &'static str {
     match code {
         KeyCode::KEY_A => "A",
@@ -305,9 +306,7 @@ fn emit_key(
     Ok(())
 }
 
-/// Write a status line that works in raw mode (no OPOST). Uses CR + clear-to-EOL.
 fn write_status(out: &mut impl Write, text: &str) -> io::Result<()> {
-    // \r = carriage return, \x1b[K = erase from cursor to end of line
     write!(out, "\r\x1b[K{}", text)?;
     out.flush()
 }
@@ -339,6 +338,18 @@ unsafe fn set_raw(fd: c_int, old: &mut termios) -> io::Result<()> {
 
 unsafe fn restore(fd: c_int, old: &termios) {
     let _ = libc::tcsetattr(fd, TCSADRAIN, old);
+}
+
+fn read_byte(fd: c_int) -> io::Result<Option<u8>> {
+    let mut buf = [0u8; 1];
+    let n = unsafe { libc::read(fd, buf.as_mut_ptr() as *mut libc::c_void, 1) };
+    if n < 0 {
+        return Err(io::Error::last_os_error());
+    }
+    if n == 0 {
+        return Ok(None);
+    }
+    Ok(Some(buf[0]))
 }
 
 fn read_timeout(fd: c_int, buf: &mut [u8], timeout_ms: i32) -> io::Result<usize> {
@@ -379,7 +390,51 @@ fn read_timeout(fd: c_int, buf: &mut [u8], timeout_ms: i32) -> io::Result<usize>
     Ok(n as usize)
 }
 
+fn print_help(program: &str) {
+    println!(
+        "Usage: {program} [OPTION]...
+
+Inject terminal input as global keyboard events via Linux uinput/evdev.
+
+Options:
+  -h, --help     Show this help and exit
+  -V, --version  Show version and exit
+
+While running, type into the terminal; keys are injected system-wide.
+A status line shows the last injected key. Press Ctrl+C three times to quit.
+
+Requires write access to /dev/uinput (root or membership in the input group).
+
+See fernkbd(1) for supported keys and limitations of terminal input.
+"
+    );
+}
+
+fn parse_args() {
+    let mut args = std::env::args();
+    let program = args.next().unwrap_or_else(|| "fernkbd".into());
+    for arg in args {
+        match arg.as_str() {
+            "-h" | "--help" => {
+                print_help(&program);
+                process::exit(0);
+            }
+            "-V" | "--version" => {
+                println!("fernkbd {VERSION}");
+                process::exit(0);
+            }
+            other => {
+                eprintln!("{program}: unrecognized option '{other}'");
+                eprintln!("Try '{program} --help' for more information.");
+                process::exit(1);
+            }
+        }
+    }
+}
+
 fn main() -> io::Result<()> {
+    parse_args();
+
     let char_map = build_char_map();
 
     let mut keys = AttributeSet::<KeyCode>::new();
@@ -423,7 +478,6 @@ fn main() -> io::Result<()> {
         keys.insert(code);
     }
 
-    // All startup messages while the terminal is still in cooked mode.
     println!("[*] Initializing virtual keyboard via /dev/uinput...");
 
     let mut device = VirtualDevice::builder()?
@@ -448,25 +502,22 @@ fn main() -> io::Result<()> {
     let mut old: termios = unsafe { std::mem::zeroed() };
     unsafe { set_raw(fd, &mut old)? };
 
-    // From here on stdout is in raw mode — only use write_status / \r\n.
     let mut stdout = io::stdout();
     write_status(
         &mut stdout,
         "[*] last: (none)                    |  exit: Ctrl+C ×3",
     )?;
 
+    // Entire input path uses the raw fd only — never mix with StdinLock buffering,
+    // otherwise CSI sequences (ESC [ A …) are split and arrows become Shift+A/B/C/D.
     let result = (|| -> io::Result<()> {
-        let mut stdin = stdin.lock();
-        let mut buf = [0u8; 1];
         let mut consecutive_ctrl_c: u8 = 0;
         let mut esc_buf = [0u8; 8];
 
         loop {
-            let n = stdin.read(&mut buf)?;
-            if n == 0 {
+            let Some(b) = read_byte(fd)? else {
                 break;
-            }
-            let b = buf[0];
+            };
 
             let mut emitted: Option<(KeyCode, bool, bool, bool)> = None;
 
@@ -557,9 +608,7 @@ fn main() -> io::Result<()> {
         Ok(())
     })();
 
-    // Leave raw mode before the final message so newlines work again.
     unsafe { restore(fd, &old) };
-    // Clear the status line and print a clean goodbye.
     print!("\r\x1b[K");
     println!("\n[*] Virtual keyboard stopped. Terminal restored.");
 

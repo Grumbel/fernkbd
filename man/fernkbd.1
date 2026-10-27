@@ -1,0 +1,112 @@
+.\" SPDX-License-Identifier: GPL-3.0-or-later
+.\" SPDX-FileCopyrightText: 2026 Ingo Ruhnke <grumbel@gmail.com>
+.TH FERNKBD 1 "October 2026" "fernkbd" "User Commands"
+.SH NAME
+fernkbd \- inject terminal input as virtual keyboard events via uinput
+.SH SYNOPSIS
+.B fernkbd
+[\fIOPTION\fR]...
+.SH DESCRIPTION
+.B fernkbd
+reads keystrokes from the terminal and injects them as global Linux input
+events through
+.IR /dev/uinput .
+Anything typed into the terminal appears as if it came from a physical
+keyboard. This is useful when working over SSH and you need to type into a
+local (or remote-desktop) session.
+.PP
+The program puts the terminal into raw mode. A status line shows the last
+key that was injected. Press
+.B Ctrl+C
+three times in a row to exit; a single or double Ctrl+C is forwarded to the
+target application.
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Show a short help message and exit.
+.TP
+.BR \-V ", " \-\-version
+Show version information and exit.
+.SH KEYS
+Supported input includes:
+.IP \(bu 2
+US-layout letters, digits, and common punctuation (with Shift)
+.IP \(bu 2
+Ctrl+A through Ctrl+Z and related control characters
+.IP \(bu 2
+Arrow keys, Home, End, Insert, Delete, PageUp, PageDown
+.IP \(bu 2
+F1–F12
+.IP \(bu 2
+Alt+character (ESC followed by a character)
+.PP
+Unmapped sequences are ignored.
+.SH LIMITATIONS
+.B fernkbd
+sees only what the terminal encodes as a byte stream, not native hardware
+key events. That imposes several constraints:
+.TP
+.B Character stream, not key events
+The program receives characters and escape sequences, not independent
+key-down / key-up reports. Modifier keys held alone (e.g. pressing Ctrl
+without another key) are not visible and cannot be injected as held
+modifiers.
+.TP
+.B Ambiguous keys
+Some keys are indistinguishable in a terminal. Tab and Ctrl+I produce the
+same byte; Enter and Ctrl+M likewise. The mapping prefers the common
+interpretation (Tab, Enter).
+.TP
+.B Limited chords
+Only combinations that terminals traditionally encode are available
+(Ctrl+letter, Alt+character via an ESC prefix, Shift via uppercase or
+shifted punctuation). Arbitrary multi-modifier chords (e.g. Ctrl+Alt+Shift+F5)
+are generally not transmitted by the terminal and therefore cannot be
+injected.
+.TP
+.B Escape-sequence coverage
+Arrow keys, function keys, and navigation keys are recognised for common
+CSI and SS3 forms. Sequences that include modifier parameters
+(e.g. Ctrl+Up as CSI with a parameter) are not fully parsed yet and may
+be ignored or partially matched. Behaviour can also depend on the
+terminal's cursor-key mode (normal vs application).
+.TP
+.B Layout
+Character-to-keycode mapping assumes a US QWERTY layout. Other layouts
+are not translated.
+.TP
+.B No mouse
+Terminal mouse protocols report character-cell coordinates only, not a
+full pointer device.
+.B fernkbd
+does not enable or inject mouse events; an X11 or similar client path is
+a better fit for pointer input.
+.TP
+.B Exit sequence
+Because a single Ctrl+C must be injectable, quitting requires three
+consecutive Ctrl+C presses.
+.SH REQUIREMENTS
+.IP \(bu 2
+Linux with
+.I /dev/uinput
+.IP \(bu 2
+Permission to write to
+.I /dev/uinput
+(root, or membership in the
+.B input
+group)
+.SH EXIT STATUS
+.TP
+.B 0
+Success (including after a normal triple-Ctrl+C exit).
+.TP
+.B 1
+Invalid command-line option or fatal error.
+.SH SEE ALSO
+.BR uinput (4),
+.BR evdev (4)
+.SH AUTHOR
+Ingo Ruhnke <grumbel@gmail.com>
+.SH COPYRIGHT
+Copyright \(co 2026 Ingo Ruhnke.
+License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.
