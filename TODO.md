@@ -3,7 +3,7 @@
 ## Tip
 
 - Base commit of this work line: `d8b6ef0` (Initial checkin — Python fernkbd.py)
-- Current tip: `1f9caf6` (Update TODO.md with current tip)
+- Current tip: `e98e490` (Point TODO tip at current HEAD)
 - Branch: master
 
 ## Done
